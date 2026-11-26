@@ -152,29 +152,33 @@ async function persistRemark(item, value) {
   } catch {
     // The backend remains the primary data store.
   }
-  if (!backendAvailable) return;
   try {
     await apiRequest('/api/remark', { method: 'PUT', body: JSON.stringify({ key, value }) });
+    backendAvailable = true;
+    return true;
   } catch {
     showToast('Remark could not be saved to the backend.');
+    return false;
   }
 }
 
 async function persistHighlight(item, dismissed) {
   const key = poHighlightKey(item);
-  if (dismissed) backendState.dismissedHighlights.add(key);
-  else backendState.dismissedHighlights.delete(key);
-  try {
-    if (dismissed) localStorage.setItem(key, 'true');
-    else localStorage.removeItem(key);
-  } catch {
-    // The backend remains the primary data store.
-  }
-  if (!backendAvailable) return;
   try {
     await apiRequest('/api/highlight', { method: 'PUT', body: JSON.stringify({ key, dismissed }) });
+    backendAvailable = true;
+    if (dismissed) backendState.dismissedHighlights.add(key);
+    else backendState.dismissedHighlights.delete(key);
+    try {
+      if (dismissed) localStorage.setItem(key, 'true');
+      else localStorage.removeItem(key);
+    } catch {
+      // The database is the primary data store.
+    }
+    return true;
   } catch {
     showToast('Highlight state could not be saved to the backend.');
+    return false;
   }
 }
 
@@ -261,19 +265,29 @@ function render() {
       <td>${money(item.billedAmount)}</td>
       <td><input class="remark-input" type="text" aria-label="Remark for PR ${escapeAttribute(item.prNumber)}" placeholder="Add a remark" value="${escapeAttribute(item.remark ?? savedRemark(item))}"></td>`;
     const remarkInput = row.querySelector('.remark-input');
+    const saveRemark = async () => {
+      window.clearTimeout(item.remarkSaveTimer);
+      const valueToSave = remarkInput.value;
+      item.remark = valueToSave;
+      remarkInput.dataset.saveState = 'saving';
+      const saved = await persistRemark(item, valueToSave);
+      remarkInput.dataset.saveState = saved ? 'saved' : 'error';
+      remarkInput.title = saved ? 'Saved automatically' : 'Not saved';
+    };
     remarkInput.addEventListener('input', () => {
       item.remark = remarkInput.value;
       window.clearTimeout(item.remarkSaveTimer);
-      item.remarkSaveTimer = window.setTimeout(() => persistRemark(item, item.remark), 350);
+      item.remarkSaveTimer = window.setTimeout(saveRemark, 350);
     });
+    remarkInput.addEventListener('blur', saveRemark);
     const poHighlight = row.querySelector('.recent-po-highlight');
-    poHighlight?.addEventListener('click', () => {
-      persistHighlight(item, true);
+    poHighlight?.addEventListener('click', async () => {
+      if (!await persistHighlight(item, true)) return;
       render();
-      showUndoToast('PO highlight removed.', () => {
-        persistHighlight(item, false);
+      showUndoToast('PO highlight removed and saved.', async () => {
+        if (!await persistHighlight(item, false)) return;
         render();
-        showToast('PO highlight restored.');
+        showToast('PO highlight restored and saved.');
       });
     });
     row.querySelector('.po-number')?.addEventListener('contextmenu', event => {
@@ -324,13 +338,13 @@ toast.addEventListener('click', event => {
   undo();
 });
 
-poContextMenu.querySelector('button').addEventListener('click', () => {
+poContextMenu.querySelector('button').addEventListener('click', async () => {
   const item = contextMenuItem;
   poContextMenu.hidden = true;
   if (!item) return;
-  persistHighlight(item, false);
+  if (!await persistHighlight(item, false)) return;
   render();
-  showToast(isPoWithinHighlightWindow(item) ? 'PO highlight restored.' : 'This PO is outside the 48-hour highlight window.');
+  showToast(isPoWithinHighlightWindow(item) ? 'PO highlight restored and saved.' : 'Saved. This PO is outside the 48-hour highlight window.');
 });
 
 document.addEventListener('click', event => {
