@@ -5,6 +5,21 @@ const defaultRecords = [
 const records = defaultRecords.map(record => ({ ...record }));
 const backendState = { remarks: {}, dismissedHighlights: new Set() };
 let backendAvailable = false;
+let xlsxLoadPromise;
+
+function ensureXlsxLibrary() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!xlsxLoadPromise) {
+    xlsxLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'xlsx.full.min.js';
+      script.onload = () => resolve(window.XLSX);
+      script.onerror = () => reject(new Error('The Excel reader could not be loaded.'));
+      document.head.append(script);
+    });
+  }
+  return xlsxLoadPromise;
+}
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, {
@@ -505,6 +520,7 @@ document.querySelector('#addPersonButton').addEventListener('click', () => {
 document.querySelector('#newRequestButton').addEventListener('click', () => {
   modal.hidden = false;
   excelDropZone.focus();
+  ensureXlsxLibrary().catch(() => {});
 });
 
 function closeModal() {
@@ -604,7 +620,7 @@ async function importExcelFiles(files) {
   importStatus.textContent = `Reading ${files.length} file${files.length === 1 ? '' : 's'}...`;
 
   try {
-    if (!window.XLSX) throw new Error('The Excel reader could not be loaded. Check the internet connection and try again.');
+    await ensureXlsxLibrary();
     const imported = [];
     for (const file of files) {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
