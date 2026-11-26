@@ -24,13 +24,25 @@ function ensureXlsxLibrary() {
 }
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
-  });
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status}).`);
-  return body;
+  const { retries = 0, retryDelay = 300, ...requestOptions } = options;
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(path, {
+        ...requestOptions,
+        headers: { 'Content-Type': 'application/json', ...(requestOptions.headers || {}) }
+      });
+      const text = await response.text();
+      let body = {};
+      try { body = text ? JSON.parse(text) : {}; } catch { /* Retry non-JSON proxy errors. */ }
+      if (!response.ok) throw new Error(body.error || `Request failed (${response.status}).`);
+      return body;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) await new Promise(resolve => setTimeout(resolve, retryDelay * (attempt + 1)));
+    }
+  }
+  throw lastError;
 }
 
 async function loadBackendState() {
@@ -169,7 +181,7 @@ async function persistRemark(item, value) {
     // The backend remains the primary data store.
   }
   try {
-    await apiRequest('/api/remark', { method: 'PUT', body: JSON.stringify({ key, value }) });
+    await apiRequest('/api/remark', { method: 'PUT', body: JSON.stringify({ key, value }), retries: 5, retryDelay: 250 });
     backendAvailable = true;
     return true;
   } catch {
@@ -181,7 +193,7 @@ async function persistRemark(item, value) {
 async function persistHighlight(item, dismissed) {
   const key = poHighlightKey(item);
   try {
-    await apiRequest('/api/highlight', { method: 'PUT', body: JSON.stringify({ key, dismissed }) });
+    await apiRequest('/api/highlight', { method: 'PUT', body: JSON.stringify({ key, dismissed }), retries: 5, retryDelay: 250 });
     backendAvailable = true;
     if (dismissed) backendState.dismissedHighlights.add(key);
     else backendState.dismissedHighlights.delete(key);
@@ -652,7 +664,7 @@ async function importExcelFiles(files) {
     }
 
     if (!imported.length) throw new Error('No records were found. Make sure at least one worksheet includes the 14-column PR / PO template and a PR NO. value.');
-    const savedState = await apiRequest('/api/import', { method: 'POST', body: JSON.stringify({ records: imported }) });
+    const savedState = await apiRequest('/api/import', { method: 'POST', body: JSON.stringify({ records: imported }), retries: 3, retryDelay: 400 });
     clearPreviousImportState();
     records.splice(0, records.length, ...(savedState.records || imported));
     backendState.remarks = savedState.remarks || {};
