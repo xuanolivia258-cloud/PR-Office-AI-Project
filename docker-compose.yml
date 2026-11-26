@@ -1,12 +1,35 @@
 services:
-  pr-office:
-    build: .
-    container_name: pr-office-ai-project
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: pr-office-backend
     restart: unless-stopped
-    ports:
-      - "8090:8090"
+    environment:
+      PORT: 8000
+      DATA_FILE: /app/data/store.json
+      SERVE_STATIC: "false"
     volumes:
       - pr-office-data:/app/data
+    ports:
+      - "127.0.0.1:8001:8000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: pr-office-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8090:80"
 
 volumes:
   pr-office-data:

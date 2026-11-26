@@ -1,6 +1,6 @@
 # PR Office AI Project
 
-PR / PO tracking system with a persistent Node.js backend.
+PR / PO tracking system with separate frontend and backend containers.
 
 ## Run with Docker
 
@@ -10,7 +10,13 @@ docker compose up -d --build
 
 Open `http://localhost:8090`.
 
-Application data is stored in the named Docker volume `pr-office-data`. Rebuilding or restarting the container does not delete the records.
+The deployment contains:
+
+- `frontend`: Nginx serves the web interface and proxies `/api` requests.
+- `backend`: Node.js provides the persistent data API.
+- `pr-office-data`: named Docker volume for stored records.
+
+Rebuilding or restarting either container does not delete the records.
 
 ## Run locally
 

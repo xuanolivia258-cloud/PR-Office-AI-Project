@@ -6,6 +6,7 @@ const root = __dirname;
 const port = Number(process.env.PORT || 8090);
 const dataFile = process.env.DATA_FILE || path.join(root, 'data', 'store.json');
 const initialDataFile = path.join(root, 'initial-data.json');
+const serveStatic = process.env.SERVE_STATIC !== 'false';
 const publicFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
@@ -108,6 +109,10 @@ const server = http.createServer(async (request, response) => {
   try {
     const pathname = new URL(request.url, `http://${request.headers.host || 'localhost'}`).pathname;
     if (pathname.startsWith('/api/')) return await handleApi(request, response, pathname);
+    if (!serveStatic) {
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return response.end('Not found');
+    }
     const publicFile = publicFiles.get(pathname);
     if (!publicFile) {
       response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -122,6 +127,6 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`PR Office server listening on http://0.0.0.0:${port}`);
+  console.log(`PR Office backend listening on http://0.0.0.0:${port}`);
   console.log(`Persistent data: ${dataFile}`);
 });
