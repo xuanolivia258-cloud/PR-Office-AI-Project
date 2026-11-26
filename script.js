@@ -8,6 +8,53 @@ let backendAvailable = false;
 let backendLoading = false;
 let backendReconnectTimer;
 let xlsxLoadPromise;
+const pendingChangesKey = 'pr-po-pending-changes';
+
+function readPendingChanges() {
+  try {
+    const value = JSON.parse(localStorage.getItem(pendingChangesKey) || '{}');
+    return {
+      remarks: value.remarks && typeof value.remarks === 'object' ? value.remarks : {},
+      highlights: value.highlights && typeof value.highlights === 'object' ? value.highlights : {}
+    };
+  } catch {
+    return { remarks: {}, highlights: {} };
+  }
+}
+
+function writePendingChanges(value) {
+  try { localStorage.setItem(pendingChangesKey, JSON.stringify(value)); } catch { /* Best effort local queue. */ }
+}
+
+function queuePendingChange(type, key, value) {
+  const pending = readPendingChanges();
+  pending[type][key] = value;
+  writePendingChanges(pending);
+}
+
+function clearPendingChange(type, key, value) {
+  const pending = readPendingChanges();
+  if (pending[type][key] !== value) return;
+  delete pending[type][key];
+  writePendingChanges(pending);
+}
+
+function scheduleBackendReconnect() {
+  window.clearTimeout(backendReconnectTimer);
+  backendReconnectTimer = window.setTimeout(loadBackendState, 1500);
+}
+
+async function flushPendingChanges() {
+  const pending = readPendingChanges();
+  for (const [key, value] of Object.entries(pending.remarks)) {
+    await apiRequest('/api/remark', { method: 'PUT', body: JSON.stringify({ key, value }), retries: 5, retryDelay: 250 });
+    clearPendingChange('remarks', key, value);
+  }
+  for (const [key, dismissed] of Object.entries(pending.highlights)) {
+    await apiRequest('/api/highlight', { method: 'PUT', body: JSON.stringify({ key, dismissed }), retries: 5, retryDelay: 250 });
+    clearPendingChange('highlights', key, dismissed);
+  }
+}
 
 function ensureXlsxLibrary() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -49,6 +96,8 @@ async function loadBackendState() {
   if (backendLoading) return;
   backendLoading = true;
   try {
+    await apiRequest('/api/health');
+    await flushPendingChanges();
     const state = await apiRequest('/api/state');
     records.splice(0, records.length, ...(Array.isArray(state.records) ? state.records : []));
     backendState.remarks = state.remarks || {};
@@ -71,8 +120,7 @@ async function loadBackendState() {
     window.clearTimeout(backendReconnectTimer);
   } catch {
     backendAvailable = false;
-    window.clearTimeout(backendReconnectTimer);
-    backendReconnectTimer = window.setTimeout(loadBackendState, 1500);
+    scheduleBackendReconnect();
   } finally {
     backendLoading = false;
   }
@@ -175,6 +223,7 @@ function isPoHighlightDismissed(item) {
 async function persistRemark(item, value) {
   const key = remarkStorageKey(item);
   backendState.remarks[key] = value;
+  queuePendingChange('remarks', key, value);
   try {
     localStorage.setItem(key, value);
   } catch {
@@ -182,31 +231,38 @@ async function persistRemark(item, value) {
   }
   try {
     await apiRequest('/api/remark', { method: 'PUT', body: JSON.stringify({ key, value }), retries: 5, retryDelay: 250 });
+    clearPendingChange('remarks', key, value);
     backendAvailable = true;
     return true;
   } catch {
-    showToast('Remark could not be saved to the backend.');
-    return false;
+    backendAvailable = false;
+    scheduleBackendReconnect();
+    showToast('Remark saved locally. It will sync automatically.');
+    return true;
   }
 }
 
 async function persistHighlight(item, dismissed) {
   const key = poHighlightKey(item);
+  queuePendingChange('highlights', key, dismissed);
+  if (dismissed) backendState.dismissedHighlights.add(key);
+  else backendState.dismissedHighlights.delete(key);
+  try {
+    if (dismissed) localStorage.setItem(key, 'true');
+    else localStorage.removeItem(key);
+  } catch {
+    // The persistent change queue remains the fallback.
+  }
   try {
     await apiRequest('/api/highlight', { method: 'PUT', body: JSON.stringify({ key, dismissed }), retries: 5, retryDelay: 250 });
+    clearPendingChange('highlights', key, dismissed);
     backendAvailable = true;
-    if (dismissed) backendState.dismissedHighlights.add(key);
-    else backendState.dismissedHighlights.delete(key);
-    try {
-      if (dismissed) localStorage.setItem(key, 'true');
-      else localStorage.removeItem(key);
-    } catch {
-      // The database is the primary data store.
-    }
     return true;
   } catch {
-    showToast('Highlight state could not be saved to the backend.');
-    return false;
+    backendAvailable = false;
+    scheduleBackendReconnect();
+    showToast('Highlight change saved locally. It will sync automatically.');
+    return true;
   }
 }
 
@@ -309,13 +365,13 @@ function render() {
     });
     remarkInput.addEventListener('blur', saveRemark);
     const poHighlight = row.querySelector('.recent-po-highlight');
-    poHighlight?.addEventListener('click', async () => {
-      if (!await persistHighlight(item, true)) return;
+    poHighlight?.addEventListener('click', () => {
+      void persistHighlight(item, true);
       render();
-      showUndoToast('PO highlight removed and saved.', async () => {
-        if (!await persistHighlight(item, false)) return;
+      showUndoToast('PO highlight removed. Auto-save enabled.', () => {
+        void persistHighlight(item, false);
         render();
-        showToast('PO highlight restored and saved.');
+        showToast('PO highlight restored. Auto-save enabled.');
       });
     });
     row.querySelector('.po-number')?.addEventListener('contextmenu', event => {
@@ -366,13 +422,13 @@ toast.addEventListener('click', event => {
   undo();
 });
 
-poContextMenu.querySelector('button').addEventListener('click', async () => {
+poContextMenu.querySelector('button').addEventListener('click', () => {
   const item = contextMenuItem;
   poContextMenu.hidden = true;
   if (!item) return;
-  if (!await persistHighlight(item, false)) return;
+  void persistHighlight(item, false);
   render();
-  showToast(isPoWithinHighlightWindow(item) ? 'PO highlight restored and saved.' : 'Saved. This PO is outside the 48-hour highlight window.');
+  showToast(isPoWithinHighlightWindow(item) ? 'PO highlight restored. Auto-save enabled.' : 'This PO is outside the 48-hour highlight window.');
 });
 
 document.addEventListener('click', event => {
