@@ -69,7 +69,7 @@
   border-radius: 5px;
   color: #5f4600;
   cursor: pointer;
-  background: #ffe58a;
+  background: #fff8d8;
   font: inherit;
   font-weight: 750;
   line-height: 1.2;
@@ -79,7 +79,7 @@
 .recent-po-highlight:focus-visible {
   outline: 2px solid rgba(190, 139, 0, .3);
   outline-offset: 2px;
-  background: #ffdc62;
+  background: #fff1b8;
 }
 
 .po-number {
