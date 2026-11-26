@@ -1,28 +1,47 @@
-const bundledDataRevision = '1795710786.8378496';
-
 const defaultRecords = [
   { prPreparer: 'Olivia', prNumber: '705157580003567', prLineDescription: 'Computer', prCreationDate: '2026-10-03', prStatus: '—', poNumber: '7051H00005758', poCreationDate: '2026-11-26', needByDate: '', servicePeriodStartDate: '2026-10-30', servicePeriodEndDate: '2026-11-30', poLineStatus: '—', poLineAmount: 0, receivedAmount: 1000, billedAmount: 1000, sourceFile: 'procurement-projects.xlsx', sourceSheet: 'Projects' },
   { prPreparer: 'Elaine', prNumber: '12345678987654300', prLineDescription: '—', prCreationDate: '', prStatus: '—', poNumber: '7051H00003890', poCreationDate: '2026-11-25', needByDate: '', servicePeriodStartDate: '2026-09-30', servicePeriodEndDate: '2026-10-05', poLineStatus: '—', poLineAmount: 0, receivedAmount: 0, billedAmount: 0, sourceFile: 'procurement-projects.xlsx', sourceSheet: 'Projects' }
 ];
+const records = defaultRecords.map(record => ({ ...record }));
+const backendState = { remarks: {}, dismissedHighlights: new Set() };
+let backendAvailable = false;
 
-function loadStoredRecords() {
-  try {
-    const stored = JSON.parse(localStorage.getItem('pr-po-tracker-records'));
-    if (stored?.revision === bundledDataRevision && Array.isArray(stored.records)) return stored.records;
-    const highlightKeys = [];
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const key = localStorage.key(index);
-      if (key?.startsWith('pr-po-creation-highlight-dismissed:')) highlightKeys.push(key);
-    }
-    highlightKeys.forEach(key => localStorage.removeItem(key));
-    localStorage.setItem('pr-po-tracker-records', JSON.stringify({ revision: bundledDataRevision, records: defaultRecords }));
-    return defaultRecords;
-  } catch {
-    return defaultRecords;
-  }
+async function apiRequest(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || `Request failed (${response.status}).`);
+  return body;
 }
 
-const records = loadStoredRecords();
+async function loadBackendState() {
+  try {
+    const state = await apiRequest('/api/state');
+    records.splice(0, records.length, ...(Array.isArray(state.records) ? state.records : []));
+    backendState.remarks = state.remarks || {};
+    backendState.dismissedHighlights = new Set(state.dismissedHighlights || []);
+    backendAvailable = true;
+    const migrations = records.flatMap(item => {
+      const key = remarkStorageKey(item);
+      if (Object.prototype.hasOwnProperty.call(backendState.remarks, key)) return [];
+      try {
+        const localRemark = localStorage.getItem(key) || localStorage.getItem(`pr-po-remark:${item.prNumber}`);
+        if (!localRemark) return [];
+        backendState.remarks[key] = localRemark;
+        return [apiRequest('/api/remark', { method: 'PUT', body: JSON.stringify({ key, value: localRemark }) })];
+      } catch {
+        return [];
+      }
+    });
+    await Promise.allSettled(migrations);
+    render();
+  } catch {
+    backendAvailable = false;
+    showToast('Backend unavailable. Showing local fallback data.');
+  }
+}
 
 const tableBody = document.querySelector('#requestTableBody');
 const searchInput = document.querySelector('#searchInput');
@@ -81,14 +100,17 @@ function remarkStorageKey(item) {
 }
 
 function savedRemark(item) {
+  const key = remarkStorageKey(item);
+  if (Object.prototype.hasOwnProperty.call(backendState.remarks, key)) return backendState.remarks[key];
   try {
-    return localStorage.getItem(remarkStorageKey(item)) || localStorage.getItem(`pr-po-remark:${item.prNumber}`) || '';
+    return localStorage.getItem(key) || localStorage.getItem(`pr-po-remark:${item.prNumber}`) || '';
   } catch {
     return '';
   }
 }
 
 function clearPreviousImportState() {
+  backendState.dismissedHighlights.clear();
   try {
     const removablePrefixes = ['pr-po-creation-highlight-dismissed:'];
     const keysToRemove = [];
@@ -107,10 +129,45 @@ function poHighlightKey(item) {
 }
 
 function isPoHighlightDismissed(item) {
+  if (backendState.dismissedHighlights.has(poHighlightKey(item))) return true;
   try {
     return localStorage.getItem(poHighlightKey(item)) === 'true';
   } catch {
     return false;
+  }
+}
+
+async function persistRemark(item, value) {
+  const key = remarkStorageKey(item);
+  backendState.remarks[key] = value;
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The backend remains the primary data store.
+  }
+  if (!backendAvailable) return;
+  try {
+    await apiRequest('/api/remark', { method: 'PUT', body: JSON.stringify({ key, value }) });
+  } catch {
+    showToast('Remark could not be saved to the backend.');
+  }
+}
+
+async function persistHighlight(item, dismissed) {
+  const key = poHighlightKey(item);
+  if (dismissed) backendState.dismissedHighlights.add(key);
+  else backendState.dismissedHighlights.delete(key);
+  try {
+    if (dismissed) localStorage.setItem(key, 'true');
+    else localStorage.removeItem(key);
+  } catch {
+    // The backend remains the primary data store.
+  }
+  if (!backendAvailable) return;
+  try {
+    await apiRequest('/api/highlight', { method: 'PUT', body: JSON.stringify({ key, dismissed }) });
+  } catch {
+    showToast('Highlight state could not be saved to the backend.');
   }
 }
 
@@ -199,26 +256,15 @@ function render() {
     const remarkInput = row.querySelector('.remark-input');
     remarkInput.addEventListener('input', () => {
       item.remark = remarkInput.value;
-      try {
-        localStorage.setItem(remarkStorageKey(item), item.remark);
-      } catch {
-        // The current browser may block local storage; keep the remark for this session.
-      }
+      window.clearTimeout(item.remarkSaveTimer);
+      item.remarkSaveTimer = window.setTimeout(() => persistRemark(item, item.remark), 350);
     });
     const poHighlight = row.querySelector('.recent-po-highlight');
     poHighlight?.addEventListener('click', () => {
-      try {
-        localStorage.setItem(poHighlightKey(item), 'true');
-      } catch {
-        // If storage is unavailable, rerendering still removes the highlight for this view.
-      }
+      persistHighlight(item, true);
       render();
       showUndoToast('PO highlight removed.', () => {
-        try {
-          localStorage.removeItem(poHighlightKey(item));
-        } catch {
-          // Keep the current view usable if storage is unavailable.
-        }
+        persistHighlight(item, false);
         render();
         showToast('PO highlight restored.');
       });
@@ -275,11 +321,7 @@ poContextMenu.querySelector('button').addEventListener('click', () => {
   const item = contextMenuItem;
   poContextMenu.hidden = true;
   if (!item) return;
-  try {
-    localStorage.removeItem(poHighlightKey(item));
-  } catch {
-    // Keep the current view usable if storage is unavailable.
-  }
+  persistHighlight(item, false);
   render();
   showToast(isPoWithinHighlightWindow(item) ? 'PO highlight restored.' : 'This PO is outside the 48-hour highlight window.');
 });
@@ -572,13 +614,12 @@ async function importExcelFiles(files) {
     }
 
     if (!imported.length) throw new Error('No records were found. Make sure at least one worksheet includes the 14-column PR / PO template and a PR NO. value.');
+    const savedState = await apiRequest('/api/import', { method: 'POST', body: JSON.stringify({ records: imported }) });
     clearPreviousImportState();
-    records.splice(0, records.length, ...imported);
-    try {
-      localStorage.setItem('pr-po-tracker-records', JSON.stringify({ revision: bundledDataRevision, records: imported }));
-    } catch {
-      // Keep the replacement data for this session if browser storage is unavailable.
-    }
+    records.splice(0, records.length, ...(savedState.records || imported));
+    backendState.remarks = savedState.remarks || {};
+    backendState.dismissedHighlights = new Set(savedState.dismissedHighlights || []);
+    backendAvailable = true;
     render();
     showToast(`${imported.length} Excel record${imported.length === 1 ? '' : 's'} imported. Previous records were replaced.`);
     closeModal();
@@ -670,14 +711,19 @@ excelFileInput.addEventListener('change', () => {
 
 confirmExcelImport.addEventListener('click', () => importExcelFiles([...pendingExcelFiles]));
 
-renderPeople();
-render();
-let initialView = 'dashboard';
-try {
-  const storedView = localStorage.getItem('pr-po-current-view');
-  if (['dashboard', 'requests', 'settings'].includes(storedView)) initialView = storedView;
-} catch {
-  // Use Dashboard when browser storage is unavailable.
+async function initialize() {
+  renderPeople();
+  render();
+  let initialView = 'dashboard';
+  try {
+    const storedView = localStorage.getItem('pr-po-current-view');
+    if (['dashboard', 'requests', 'settings'].includes(storedView)) initialView = storedView;
+  } catch {
+    // Use Dashboard when browser storage is unavailable.
+  }
+  showView(initialView, document.querySelector(`[data-view="${initialView}"]`));
+  await loadBackendState();
+  document.documentElement.classList.remove('app-loading');
 }
-showView(initialView, document.querySelector(`[data-view="${initialView}"]`));
-document.documentElement.classList.remove('app-loading');
+
+initialize();

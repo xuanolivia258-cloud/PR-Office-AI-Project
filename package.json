@@ -1,0 +1,12 @@
+{
+  "name": "pr-office-ai-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PR / PO tracking system with a persistent backend",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,12 @@
+services:
+  pr-office:
+    build: .
+    container_name: pr-office-ai-project
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - pr-office-data:/app/data
+
+volumes:
+  pr-office-data:
