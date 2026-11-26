@@ -17,8 +17,10 @@ async function apiRequest(path, options = {}) {
 }
 
 async function loadBackendState() {
-  try {
-    const state = await apiRequest('/api/state');
+  let lastError;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      const state = await apiRequest('/api/state');
     records.splice(0, records.length, ...(Array.isArray(state.records) ? state.records : []));
     backendState.remarks = state.remarks || {};
     backendState.dismissedHighlights = new Set(state.dismissedHighlights || []);
@@ -37,10 +39,15 @@ async function loadBackendState() {
     });
     await Promise.allSettled(migrations);
     render();
-  } catch {
-    backendAvailable = false;
-    showToast('Backend unavailable. Showing local fallback data.');
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
   }
+  backendAvailable = false;
+  console.error('Backend connection failed after retries:', lastError);
+  showToast('Backend unavailable. Showing local fallback data.');
 }
 
 const tableBody = document.querySelector('#requestTableBody');
