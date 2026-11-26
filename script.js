@@ -5,6 +5,8 @@ const defaultRecords = [
 const records = defaultRecords.map(record => ({ ...record }));
 const backendState = { remarks: {}, dismissedHighlights: new Set() };
 let backendAvailable = false;
+let backendLoading = false;
+let backendReconnectTimer;
 let xlsxLoadPromise;
 
 function ensureXlsxLibrary() {
@@ -32,10 +34,10 @@ async function apiRequest(path, options = {}) {
 }
 
 async function loadBackendState() {
-  let lastError;
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    try {
-      const state = await apiRequest('/api/state');
+  if (backendLoading) return;
+  backendLoading = true;
+  try {
+    const state = await apiRequest('/api/state');
     records.splice(0, records.length, ...(Array.isArray(state.records) ? state.records : []));
     backendState.remarks = state.remarks || {};
     backendState.dismissedHighlights = new Set(state.dismissedHighlights || []);
@@ -54,15 +56,14 @@ async function loadBackendState() {
     });
     await Promise.allSettled(migrations);
     render();
-      return;
-    } catch (error) {
-      lastError = error;
-      if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
-    }
+    window.clearTimeout(backendReconnectTimer);
+  } catch {
+    backendAvailable = false;
+    window.clearTimeout(backendReconnectTimer);
+    backendReconnectTimer = window.setTimeout(loadBackendState, 1500);
+  } finally {
+    backendLoading = false;
   }
-  backendAvailable = false;
-  console.error('Backend connection failed after retries:', lastError);
-  showToast('Backend unavailable. Showing local fallback data.');
 }
 
 const tableBody = document.querySelector('#requestTableBody');
@@ -759,8 +760,8 @@ async function initialize() {
     // Use Dashboard when browser storage is unavailable.
   }
   showView(initialView, document.querySelector(`[data-view="${initialView}"]`));
-  await loadBackendState();
   document.documentElement.classList.remove('app-loading');
+  void loadBackendState();
 }
 
 initialize();
