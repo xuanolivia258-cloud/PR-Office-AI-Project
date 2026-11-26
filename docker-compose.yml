@@ -1,4 +1,20 @@
 services:
+  database:
+    image: postgres:17-alpine
+    container_name: pr-office-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pr_office
+      POSTGRES_USER: pr_office
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pr-office-local-password}
+    volumes:
+      - pr-office-database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pr_office -d pr_office"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -7,10 +23,11 @@ services:
     restart: unless-stopped
     environment:
       PORT: 8000
-      DATA_FILE: /app/data/store.json
+      DATABASE_URL: postgresql://pr_office:${POSTGRES_PASSWORD:-pr-office-local-password}@database:5432/pr_office
       SERVE_STATIC: "false"
-    volumes:
-      - pr-office-data:/app/data
+    depends_on:
+      database:
+        condition: service_healthy
     ports:
       - "127.0.0.1:8001:8000"
     healthcheck:
@@ -32,4 +49,4 @@ services:
       - "8090:80"
 
 volumes:
-  pr-office-data:
+  pr-office-database:
