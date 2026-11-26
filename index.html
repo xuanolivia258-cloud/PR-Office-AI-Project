@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en" class="app-loading">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PR Office AI Project workspace">
+  <title>PR Office AI Project</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="tracker.css">
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to content</a>
+  <header class="app-header">
+    <a class="brand" href="#" aria-label="PR Office home">
+      <span class="brand-mark" role="img" aria-label="Maple leaf">🍁︎</span>
+      <span><strong>PR Office</strong></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <button class="nav-item active" data-view="dashboard"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>Dashboard</button>
+      <button class="nav-item" data-view="requests"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>PR / PO Tracker</button>
+    </nav>
+    <div class="account-menu-wrap">
+      <button class="account-button" id="accountMenuButton" type="button" aria-label="Account menu" aria-haspopup="menu" aria-expanded="false">
+        <span class="avatar">LU</span><span class="account-name">Local Test User</span><span class="account-chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div class="account-menu" id="accountMenu" role="menu" hidden>
+        <div class="account-menu-header"><strong>Local Test User</strong><small>Administrator</small></div>
+        <button class="account-menu-item" id="accountSettingsButton" type="button" role="menuitem"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="14" cy="18" r="2"/></svg></span>Settings</button>
+        <button class="account-menu-item logout-item" id="logoutButton" type="button" role="menuitem"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9"/></svg></span>Log out</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="workspace">
+    <section class="view active" id="dashboardView">
+      <div class="page-heading">
+        <div><h1>PR / PO Status Overview</h1></div>
+      </div>
+
+      <div class="metric-grid">
+        <article class="metric-card"><span>Open POs</span><strong id="openPoCount">0</strong><small>Records with a PO number</small></article>
+        <article class="metric-card"><span>PO Pending Issuance</span><strong id="poPendingIssuanceCount">0</strong><small>POs currently highlighted in yellow</small></article>
+        <article class="metric-card"><span>Date Attention Required</span><strong id="dateAttentionCount">0</strong><small>Due within one month or beyond target date</small></article>
+      </div>
+
+    </section>
+
+    <section class="view settings-view" id="settingsView" hidden>
+      <div class="settings-heading">
+        <p class="eyebrow">ACCESS CONTROL</p>
+        <h1>Permission Management</h1>
+        <p>Administrators can view all PR / PO data and use every system function.</p>
+      </div>
+
+      <section class="settings-card">
+        <h2>Add administrator</h2>
+        <form class="person-search" id="personSearchForm">
+          <label><span>Name / Employee ID</span><input id="personSearchInput" type="search" placeholder="Enter a name or employee ID" required></label>
+          <button class="primary-button" type="submit">Search</button>
+        </form>
+        <div class="search-result" id="personSearchResult" hidden>
+          <div class="person-identity"><span class="person-avatar" id="searchAvatar">JD</span><span><strong id="searchName">Jordan Davis</strong><small id="searchEmployeeId">EMP-1048</small></span></div>
+          <button class="primary-button" id="addPersonButton" type="button">Add administrator</button>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <div class="assigned-header"><h2>Assigned people</h2><span id="assignedCount">1</span></div>
+        <div class="people-list" id="peopleList"></div>
+      </section>
+    </section>
+
+    <section class="view placeholder-view" id="placeholderView" hidden>
+      <div class="page-heading">
+        <div><h1 id="placeholderTitle">PR / PO Tracker</h1></div>
+        <button class="primary-button" id="newRequestButton" type="button">＋ Import Record</button>
+      </div>
+      <section class="panel requests-panel">
+        <div class="filters">
+          <label class="search-field"><span>Search</span><input id="searchInput" type="search" placeholder="PR, PO, requestor, description..."></label>
+        </div>
+        <div class="table-wrap">
+          <table class="tracking-table">
+            <thead><tr><th>PR Preparer</th><th>PR No.</th><th>PR Line Description</th><th>PR Creation Date</th><th>PR Status</th><th>PO No.</th><th>PO Creation Date</th><th>Need By Date</th><th>Service Period Start Date</th><th>Service Period End Date</th><th>PO Line Status</th><th>PO Line Amount</th><th>Received Amount</th><th>Billed Amount</th><th>Remark</th></tr></thead>
+            <tbody id="requestTableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer"><span id="resultCount">4 records</span><span>Page 1 of 1</span></div>
+      </section>
+    </section>
+  </main>
+
+  <section class="signed-out-screen" aria-labelledby="signedOutTitle">
+    <div class="signed-out-card">
+      <span class="signed-out-mark" role="img" aria-label="Maple leaf">🍁︎</span>
+      <h1 id="signedOutTitle">You have logged out</h1>
+      <p>Your PR and PO tracking data remains available when you sign back in.</p>
+      <button class="primary-button" id="signInAgainButton" type="button">Sign in as Local Test User</button>
+    </div>
+  </section>
+
+  <div class="modal-backdrop" id="requestModal" hidden>
+    <section class="modal record-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header"><div><p class="eyebrow">PR / PO TRACKING</p><h2 id="modalTitle">Import records</h2></div><button id="closeModal" type="button" aria-label="Close">×</button></div>
+      <section class="excel-import" aria-labelledby="excelImportTitle">
+        <div class="excel-import-copy"><h3 id="excelImportTitle">Import from Excel</h3><p>Drop one or more Excel files. All worksheets will be read and combined.</p></div>
+        <div class="excel-upload" id="excelDropZone" role="group" aria-label="Excel file drop zone" tabindex="0">
+          <div class="drop-prompt" id="dropPrompt"><span class="upload-icon" aria-hidden="true">⇧</span><span><strong>Drag &amp; drop Excel file here</strong><small>Release to import .xlsx, .xls or .csv</small></span></div>
+        </div>
+        <input id="excelFileInput" type="file" accept=".xlsx,.xls,.csv" multiple hidden tabindex="-1">
+        <div class="excel-file-list" id="excelFileList" aria-label="Files ready to import" hidden></div>
+        <p class="excel-columns">The importer reads the 14 PR / PO tracking fields from every worksheet and ignores other columns.</p>
+        <p class="import-status" id="importStatus" role="status" aria-live="polite"></p>
+      </section>
+      <div class="modal-actions import-actions"><button class="primary-button" id="confirmExcelImport" type="button" disabled>Import Record</button></div>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
