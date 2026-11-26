@@ -237,7 +237,6 @@ async function persistRemark(item, value) {
   } catch {
     backendAvailable = false;
     scheduleBackendReconnect();
-    showToast('Remark saved locally. It will sync automatically.');
     return true;
   }
 }
@@ -261,7 +260,6 @@ async function persistHighlight(item, dismissed) {
   } catch {
     backendAvailable = false;
     scheduleBackendReconnect();
-    showToast('Highlight change saved locally. It will sync automatically.');
     return true;
   }
 }
@@ -368,10 +366,10 @@ function render() {
     poHighlight?.addEventListener('click', () => {
       void persistHighlight(item, true);
       render();
-      showUndoToast('PO highlight removed. Auto-save enabled.', () => {
+      showUndoToast('PO highlight removed.', () => {
         void persistHighlight(item, false);
         render();
-        showToast('PO highlight restored. Auto-save enabled.');
+        showToast('PO highlight restored.');
       });
     });
     row.querySelector('.po-number')?.addEventListener('contextmenu', event => {
@@ -428,7 +426,7 @@ poContextMenu.querySelector('button').addEventListener('click', () => {
   if (!item) return;
   void persistHighlight(item, false);
   render();
-  showToast(isPoWithinHighlightWindow(item) ? 'PO highlight restored. Auto-save enabled.' : 'This PO is outside the 48-hour highlight window.');
+  showToast(isPoWithinHighlightWindow(item) ? 'PO highlight restored.' : 'This PO is outside the 48-hour highlight window.');
 });
 
 document.addEventListener('click', event => {
