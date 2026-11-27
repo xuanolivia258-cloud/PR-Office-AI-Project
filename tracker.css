@@ -660,6 +660,11 @@ body.signed-out .signed-out-screen {
   overflow-y: auto;
 }
 
+.record-modal .import-close-row {
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
 .excel-import {
   padding: 18px;
   border: 1px solid #d6dfeb;
