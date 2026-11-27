@@ -30,12 +30,12 @@
 
 .tracking-table th,
 .tracking-table td {
-  padding: 8px 12px;
-  line-height: 1.25;
+  padding: 5px 10px;
+  line-height: 1.15;
 }
 
 .tracking-table .status {
-  padding: 3px 7px;
+  padding: 2px 6px;
 }
 
 .tracking-table tbody tr.upcoming-date-row {
@@ -48,8 +48,8 @@
 
 .remark-input {
   width: 210px;
-  height: 30px;
-  padding: 0 10px;
+  height: 26px;
+  padding: 0 8px;
   border: 1px solid #d5deea;
   border-radius: 6px;
   color: #1f2d43;
@@ -64,7 +64,7 @@
 }
 
 .recent-po-highlight {
-  padding: 4px 8px;
+  padding: 2px 6px;
   border: 1px solid #e3bd54;
   border-radius: 5px;
   color: #5f4600;
