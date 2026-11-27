@@ -640,6 +640,20 @@ body.signed-out .signed-out-screen {
   padding-top: 0;
 }
 
+#placeholderView .page-heading {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+#placeholderTitle {
+  font-size: 25px;
+  line-height: 1.15;
+}
+
+#placeholderView #newRequestButton {
+  min-height: 34px;
+}
+
 .record-modal {
   width: min(720px, 100%);
   max-height: calc(100vh - 40px);
